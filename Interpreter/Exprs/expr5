@@ -1,0 +1,20 @@
+is_prime=5357603;
+
+result = 1;
+mod=2;
+while ((result!=0) && (mod*mod<=is_prime))
+{
+  tmp=mod;
+  n=is_prime;
+  while (tmp<=n)
+    tmp=tmp*2;
+  while (n>=mod)
+  {	 
+    while (tmp>n)
+      tmp=tmp/2;
+    n=n-tmp;
+  }
+  (n==0)?(result=0):(0);
+  (mod!=2)?++mod:0;
+  ++mod;
+}

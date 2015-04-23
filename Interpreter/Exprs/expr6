@@ -1,0 +1,9 @@
+a=0;
+i=10;
+result=!i?0:1;
+do
+{
+  result=result+a;
+  a=result-a;
+}
+while (i-->2);

@@ -1,0 +1,13 @@
+n=100;
+mod=3;
+
+tmp=mod;
+while (tmp<=n)
+  tmp=tmp*2;
+while (n>=mod)
+{
+  while (tmp>n)
+    tmp=tmp/2;
+  n=n-tmp;
+}
+result=n;

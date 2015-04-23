@@ -1,0 +1,111 @@
+function mod(n,mod)
+{
+  tmp=mod;
+  while (tmp<=n)
+    tmp=tmp*2;
+  while (n>=mod)
+  {
+    while (tmp>n)
+      tmp=tmp/2;
+    n=n-tmp;
+  }
+  result=n;
+}
+
+function mod_exp(n,pow,mod)
+{
+  i=1;
+  while(i<=pow)
+    i=i*2;
+  i=i/2;
+
+  result=1;
+  while (i>=1)
+  {  
+    result=result*result;
+    if (pow>=i)
+    {
+      result=result*n;
+      pow=pow-i;
+    }
+    i=i/2;
+    result=mod(result,mod);
+  } 
+}
+
+function witness(a,s,d,n)
+{
+  result=0;
+  if (mod_exp(a,d,n)==1)
+    result=1;
+  i=1;
+  while ((result==0) && (s>=1))
+  {
+    if (mod_exp(a,d*i,n)==n-1)
+      result=1;
+    i=i*2;
+    --s;
+  }
+}
+
+function mr2047(s,d,n)
+{
+  result=1;
+  result=result*witness(2,s,d,n);
+}
+
+function mr1373k(s,d,n)
+{
+  result=1;
+  result=result*witness(2,s,d,n);
+  if (result==1)
+    result=result*witness(3,s,d,n);
+}
+
+function mr9080k(s,d,n)
+{
+  result=1;
+  result=result*witness(31,s,d,n);
+  if (result==1)
+    result=result*witness(73,s,d,n);
+}
+
+function mr25326k(s,d,n)
+{
+  result=1;
+  result=result*witness(2,s,d,n);
+  if (result==1)
+    result=result*witness(3,s,d,n);
+  if (result==1)
+    result=result*witness(5,s,d,n);
+}
+
+function miller_rabin(n)
+{
+  i=2;
+  s=1;
+  n=n-1;
+  while (mod(n,i)==0)
+  {
+    i=i*2;
+    ++s;
+  }
+  n=n+1;
+  --s;
+  i=i/2;
+  i=(n-1)/i;
+  result=mod(n,2);
+  if (result==1)
+  {
+    if (n<2047)
+      result=mr2047(s,i,n);
+    else if (n<1373653)
+      result=mr1373k(s,i,n);
+    else if (n<9080191)
+      result=mr9080k(s,i,n);
+    else if (n<25326001)
+      result=mr25326k(s,i,n);
+  }
+}
+
+result=miller_rabin(25325981);

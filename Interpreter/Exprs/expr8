@@ -1,0 +1,5 @@
+n=9;
+result=0;
+i=0;
+while (++i<=n)
+  result=result+i;

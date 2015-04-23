@@ -1,0 +1,12 @@
+result=0;
+{
+a=345672;
+b=456789;
+(a<b)?(b=b+a):(a=a+b);
+(a<b)?(a=b-a):(b=a-b);
+while (a!=0)
+{
+  (a<b)?(b=b-a):(a=a-b);
+}
+result=b;
+}

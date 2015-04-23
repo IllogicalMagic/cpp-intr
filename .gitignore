@@ -1,0 +1,8 @@
+*~
+*.o
+Interpreter/**/*.tab.*
+Interpreter/**/*.flex.*
+Interpreter/Parser/stack.hh
+Interpreter/**/*.output
+Interpreter/Intr
+Interpreter/IntrTests

@@ -1,0 +1,561 @@
+%code requires
+{
+#include "../SyntaxTree.h"
+#include "../FuncCont.h"
+#include <vector>
+#include <string>
+#include "../Table.h"
+#include <cassert>
+
+namespace yy
+{
+class ParsingDriver;
+}
+
+#define YYLLOC_DEFAULT(Cur, Rhs, N)			\
+if (N)			    	 			\
+  {							\
+    (Cur)=YYRHSLOC(Rhs,1);				\
+  } 							\
+else							\
+  {							\
+    (Cur)=YYRHSLOC(Rhs,0);				\
+  }
+}
+
+%code
+{
+#include "ParsingDriver.h"
+using namespace ParseTree;
+
+namespace yy
+{
+ParserXX::token_type yylex
+(ParserXX::semantic_type* yylval,ParserXX::location_type* yylloc,
+ParsingDriver* driver);
+}
+
+}
+
+%skeleton "lalr1.cc"
+
+
+%defines
+%define parser_class_name {ParserXX}
+%define api.value.type {ParseTree::ISyntaxTreeNode*}
+%define api.location.type {unsigned}
+%param {yy::ParsingDriver* driver}
+
+%token 
+  NUM
+  ID
+  WHILE
+  DO
+  IF
+  ELSE
+  FUNC
+  ARRAY
+  INC "++"
+  DEC "--"
+  END 0
+  OR "||"
+  AND "&&"
+  LESS_EQ "<="
+  GR_EQ ">="
+  EQUAL "=="
+  NOT_EQUAL "!="
+  ERR
+;
+
+%left OR
+%left AND
+
+%left 
+  '<'
+  LESS_EQ
+  '>'
+  GR_EQ
+  EQUAL
+  NOT_EQUAL
+;
+
+%left '+' '-'
+%left '*' '/'
+
+%%
+
+%start program;
+
+program:  
+  funcdefs stmts
+  {
+    driver->mn=$stmts;
+    driver->fc->InsertMain($stmts,driver->func_size+1);
+  }
+;
+
+funcdefs: 
+  %empty		{$$=nullptr;}
+| funcdefs function	{$$=nullptr;}
+;
+
+function: 
+  FUNC ID
+  {
+    driver->fn=new FuncCont::FuncType(*$2->GetName(),@1);
+  } 
+  pars block
+  {   
+    driver->MakeFunc($block);
+    driver->func_size=0;
+    driver->fn=nullptr;
+    delete $2;
+  }
+;
+
+pars: 
+  '(' parlist ')'	{$$=$parlist;}
+
+| parlist ')' 		
+  {driver->err.LineError("Expected '(' after function name",@0);}
+
+| '(' parlist		
+  {driver->err.LineError("Expected ')' after function parameters",@0);}
+
+| parlist
+  {driver->err.LineError("Expected '()' after function name",@0);}
+;
+
+parlist:
+  %empty	{$$=nullptr;}
+| morepars
+;
+
+morepars: 
+  par			{$$=nullptr;}
+| morepars ',' par	{$$=nullptr;}
+| ','
+  {driver->err.LineError("Expected name after ','",@1);}
+| morepars par
+  {
+    $$=nullptr;
+    driver->err.LineError("Expected ',' before name",@2);
+  }
+;
+
+par:
+  ID
+  {
+    driver->fn->AddPar(*$1->GetName(),FuncCont::ParType::VAL);
+    ++driver->func_size;
+    delete $1;
+  }
+| ID '&'
+  {
+    driver->fn->AddPar(*$1->GetName(),FuncCont::ParType::REF);
+    ++driver->func_size;
+    delete $1;
+  }
+| ID '[' NUM ']'
+  {
+    if ($3->GetVal()<1.0)
+      driver->err.LineError("Array size cannot be zero or negative",@3);
+    driver->fn->AddPar(*$1->GetName(),FuncCont::ParType::ARR,$3->GetVal());
+    ++driver->func_size;
+    delete $1;
+    delete $3;
+  }
+| ID '[' ']'
+  {
+    driver->fn->AddPar(*$1->GetName(),FuncCont::ParType::ARR,0);
+    ++driver->func_size;
+    delete $1;
+  }
+| invalid_param {driver->err.LineError("Invalid function parameter",@1);}
+
+
+invalid_param:
+  '[' ']'
+| '[' NUM ']'	{delete $2;}
+| '&'
+
+stmts: 
+  %empty	{$$=nullptr;}
+| stmts ';'	{$$=$1;}
+| stmts stmt	{$$=driver->Merge($1,$stmt);}
+| stmts block	{$$=driver->Merge($1,$block);}
+| stmts function
+  {
+    driver->err.LineError
+      ("Function definitions allowed only in the beginning of program",@2);
+    $$=$1;
+  }
+| stmts error	{driver->err.LineError("Unexpected '}'",@2);$$=$1;}
+;
+
+block: 
+  '{' stmts '}'	{$$=new SyntaxTreeNodeSeq;$$->SetOp($2);}
+| '{' stmts error	
+  {
+    driver->err.Error("Expected '}' in the end of file");
+    delete $2;
+    $$=nullptr;
+  }
+;
+
+stmt:
+  while
+| dowhile
+| if
+| ifelse
+| arrdecl ';'
+| expr ';'	
+  {
+    $$=new SyntaxTreeNodeClear();
+    $$->SetOp($1);
+    ++driver->func_size;
+  }
+| arrdecl
+  {
+    driver->err.LineError("Expected ';' after array declaration",@1);
+    $$=$1;
+  }
+| expr		
+  {
+    driver->err.LineError("Expected ';' after expression",@1);
+    $$=$1;
+  }
+| ')'
+  {driver->err.LineError("Unexpected ')'",@1);$$=nullptr;}
+| ','
+  {driver->err.LineError("Unexpected ','",@1);$$=nullptr;}
+| ':'
+  {driver->err.LineError("Unexpected ':'",@1);$$=nullptr;}
+| ELSE
+  {driver->err.LineError("Unexpected 'else'",@1);$$=nullptr;}
+| ']'
+  {driver->err.LineError("Unexpected ']'",@1);$$=nullptr;}
+;
+
+while:
+  WHILE cond stmtbody
+  {
+    $$=new SyntaxTreeNodeLoop(SemTable::WHILE,@1);
+    $$->SetOp($cond,1);
+    $$->SetOp($stmtbody,2);
+    driver->func_size+=2;
+  }
+;
+
+dowhile:
+  DO stmtbody do_cond ';'
+  {
+    $$=new SyntaxTreeNodeLoop(SemTable::DO,@1);
+    $$->SetOp($do_cond,1);
+    $$->SetOp($stmtbody,2);
+    ++driver->func_size;
+  }
+| DO stmtbody do_cond
+  {driver->err.LineError("Expected ';'",@3);delete $2;delete $3;$$=nullptr;}
+;
+
+do_cond:
+  WHILE cond		{$$=$2;}
+| {driver->err.LineError("Expected 'while'",@0);}
+  cond
+  {delete $cond;$$=nullptr;}
+| %empty {driver->err.LineError("Expected 'while' with condition",@0);$$=nullptr;}
+;
+
+cond:
+  '(' expr ')' 	{$$=$expr;}
+| {driver->err.LineError("Expected '('",@0);}
+  expr ')' 	{$$=$expr;}
+| error		{driver->err.LineError("Expected condition",@1);}
+
+stmtbody:
+  %empty	{driver->err.LineError("Expected ';'",@0);$$=nullptr;}
+| ';'		{$$=nullptr;}
+| stmt
+| block
+;
+
+if:
+  IF cond stmtbody
+  {
+    $$=new SyntaxTreeNodeTern(SemTable::IF,@1);
+    $$->SetOp($cond,1);
+    $$->SetOp($stmtbody,2);
+    ++driver->func_size;
+  }
+;
+
+ifelse:
+  if ELSE stmtbody
+  {
+    $$=$if;
+    $$->SetOp($stmtbody,3);
+    ++driver->func_size;
+  }
+;
+
+arrdecl:
+  ARRAY ID[nm] '[' optnum ']' optdef
+  {
+    $$=new SyntaxTreeNodeArray(*$nm->GetName(),@1);
+    delete $nm;
+
+    $$->SetOp($optnum,1);
+    $$->SetOp($optdef,2);
+    if ($optnum && $optnum->GetVal()<1)
+      driver->err.LineError("Size only cannot be zero or negative",@1);
+    if ($optnum && $optdef)
+      if ($optnum->GetVal() < $optdef->Size())
+        driver->err.LineError("Too many values in initializer list",@optdef);
+    if (!$optnum && !$optdef)
+      driver->err.LineError("Unknown array size",@1);
+
+    if ($optdef)
+      driver->func_size+=$optdef->Size();
+    driver->func_size+=2;
+  }
+;
+
+optnum:
+  %empty	{$$=nullptr;}
+| NUM
+| expr
+  {
+    $$=nullptr;
+    delete $expr;
+    driver->err.LineError("Size only can be numeric constant",@1);
+  }
+;
+
+optdef:
+  %empty		{$$=nullptr;}
+| '=' '[' deflist ']'	{$$=$deflist;}
+| '='
+  {driver->err.LineError("Expected '[' before initializer-list",@1);}
+  deflist ']'
+  {$$=$deflist;}
+
+| '=' '[' deflist
+  {driver->err.LineError("Expected ']' after initializer-list",@3); $$=$deflist;}
+| '=' deflist
+  {
+    driver->err.LineError("Initializer-list should be between '[' and ']'",@2);
+    $$=nullptr;
+    delete $deflist;
+  }
+
+;
+
+deflist:
+  %empty {$$=new SyntaxTreeNodeArgs(@0);}
+| defs
+;
+
+defs:
+  expr
+  {
+    $$=new SyntaxTreeNodeArgs(@0);
+    $$->SetArg($1);
+  }
+
+| defs ',' expr
+  {
+    $1->SetArg($expr);
+    $$=$1;
+  }
+
+| ','
+  {driver->err.LineError("Expected expression before and after ','",@1);}
+
+| defs expr
+  {
+    delete $2;
+    driver->err.LineError("Expected ',' before expression",@2);
+    $$=nullptr;
+  }
+
+| ',' expr
+  {
+    delete $2;
+    driver->err.LineError("Expected expression before ','",@1);
+    $$=nullptr;
+  }
+;
+
+expr:
+  tern		{$$=$1;}
+| tern '=' expr[rhs]
+  {
+    $$=new SyntaxTreeNodeBinSimple(SemTable::ASSIGN,@2);
+    $$->SetOp($tern,1);
+    $$->SetOp($rhs,2);
+    ++driver->func_size;
+  }
+;
+
+tern:
+  binary	{$$=$1;}
+| binary '?' expr ':' tern[res]
+  {
+    $$=new SyntaxTreeNodeTern(SemTable::TERN,@2);
+    $$->SetOp($binary,1);
+    $$->SetOp($expr,2);
+    $$->SetOp($res,3);
+    driver->func_size+=2;
+  }
+| binary '?' expr 
+  {
+    driver->err.LineError("Expected ':' in ternary operator",@2);
+  }
+  tern[res]
+  {
+    delete $expr;
+    delete $res;
+    delete $binary;
+    $$=nullptr;
+  }
+; 
+
+binary:
+  pref_unary		{$$=$1;}
+| binary "||" binary	{$$=driver->MakeBin(SemTable::OR,$1,$3,@2);}
+| binary "&&" binary	{$$=driver->MakeBin(SemTable::AND,$1,$3,@2);}
+| binary '<' binary	{$$=driver->MakeBin(SemTable::LESS,$1,$3,@2);}
+| binary "<=" binary	{$$=driver->MakeBin(SemTable::LESS_EQ,$1,$3,@2);}
+| binary '>' binary	{$$=driver->MakeBin(SemTable::GR,$1,$3,@2);}
+| binary ">=" binary	{$$=driver->MakeBin(SemTable::GR_EQ,$1,$3,@2);}
+| binary "==" binary	{$$=driver->MakeBin(SemTable::EQUAL,$1,$3,@2);}
+| binary "!=" binary	{$$=driver->MakeBin(SemTable::NOT_EQUAL,$1,$3,@2);}
+| binary '+' binary	{$$=driver->MakeBin(SemTable::PLUS,$1,$3,@2);}
+| binary '-' binary	{$$=driver->MakeBin(SemTable::MINUS,$1,$3,@2);}
+| binary '*' binary	{$$=driver->MakeBin(SemTable::MUL,$1,$3,@2);}
+| binary '/' binary	{$$=driver->MakeBin(SemTable::DIV,$1,$3,@2);}
+;
+
+pref_unary:
+  primary		{$$=$1;}
+| '-' pref_unary	{$$=driver->MakePref(SemTable::UN_MINUS,$2,@1);}
+| '+' pref_unary	{$$=driver->MakePref(SemTable::UN_PLUS,$2,@1);}
+| '!' pref_unary	{$$=driver->MakePref(SemTable::NOT,$2,@1);}
+| "++" pref_unary	{$$=driver->MakePref(SemTable::INC,$2,@1);}
+| "--" pref_unary	{$$=driver->MakePref(SemTable::DEC,$2,@1);}
+;
+
+primary:
+  error 
+  {
+    driver->err.LineError("Expected primary expression",@1);
+  }
+  post_unary
+  {
+    $$=nullptr;
+    delete $error;
+    delete $post_unary;
+  }
+| ID post_unary
+  {
+    $$=driver->MakePrim($1,$2);
+    ++driver->func_size;
+  }
+
+| NUM post_unary
+  {
+    $$=driver->MakePrim($1,$2);
+    ++driver->func_size;
+  }
+
+| '(' expr ')' post_unary	{$$=driver->MakePrim($2,$4);}
+
+| '(' expr 
+  {driver->err.LineError("Expected ')'",@expr);}
+  post_unary
+  {
+    $$=driver->MakePrim($expr,$post_unary);
+  }
+;
+
+post_unary:
+  %empty		{$$=nullptr;}
+| "++" post_unary	{$$=driver->MakePost(SemTable::INC_P,$2,@1);}
+| "--" post_unary	{$$=driver->MakePost(SemTable::DEC_P,$2,@1);}
+
+| func_call post_unary
+  {    
+    $$=driver->MakePrim($1,$2);
+    ++driver->func_size;
+  }
+
+| arr_access post_unary
+  {
+    $$=new SyntaxTreeNodeAccess(@1);
+    $$->SetArg($1);
+    if ($2)
+      {
+        $2->SetOp($$);
+	$$=$2;
+      }
+    ++driver->func_size;
+  }
+;
+
+arr_access:
+  '[' expr ']'		{$$=$expr;}
+| '[' expr 		{driver->err.LineError("Expected ']'",@expr);$$=$expr;}
+;
+
+func_call:
+  '(' arglist ')'	{$$=$2;}
+| '(' arglist 		{$$=$2;driver->err.LineError("Expected ')'",@2);}
+;
+
+arglist:
+  %empty {$$=new SyntaxTreeNodeArgs(@0);}
+| args
+;
+
+args:
+  expr
+  {
+    $$=new SyntaxTreeNodeArgs(@0);
+    $$->SetArg($1);
+  }
+
+| args ',' expr
+  {
+    $1->SetArg($expr);
+    $$=$1;
+  }
+
+| ','
+  {driver->err.LineError("Expected expression before and after ','",@1);}
+
+| args expr
+  {
+    delete $2;
+    driver->err.LineError("Expected ',' before expression",@2);
+    $$=nullptr;
+  }
+
+| ',' expr
+  {
+    delete $2;
+    driver->err.LineError("Expected expression before ','",@1);
+    $$=nullptr;
+  }
+;
+
+%%
+
+yy::ParserXX::token_type yy::yylex
+(yy::ParserXX::semantic_type* yylval,yy::ParserXX::location_type* yylloc,
+yy::ParsingDriver* driver)
+{
+  return driver->yylex(yylval,yylloc);
+}
+
+void yy::ParserXX::error(const location_type&,const std::string&){}

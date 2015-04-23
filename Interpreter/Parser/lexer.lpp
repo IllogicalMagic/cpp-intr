@@ -1,0 +1,41 @@
+%{
+#include "parser.tab.hpp"
+
+%}
+
+%option reentrant
+%option noyywrap batch yylineno nounput
+
+ws	[ \t\n]+
+
+name	[_[:alpha:]][_[:alnum:]]*
+num	[0-9]+(\.[0-9]*)?([eE][\+\-]?[0-9]+)?
+
+%%
+
+{ws}
+
+while			{return yy::ParserXX::token_type::WHILE;}
+do			{return yy::ParserXX::token_type::DO;}
+if			{return yy::ParserXX::token_type::IF;}
+else			{return yy::ParserXX::token_type::ELSE;}
+function		{return yy::ParserXX::token_type::FUNC;}
+array			{return yy::ParserXX::token_type::ARRAY;}
+{name}			{return yy::ParserXX::token_type::ID;}
+[<>!\+\-*/{}()?:=;,]	{return 
+			  static_cast<yy::ParserXX::token_type>(yytext[0]);}
+[\[\]\&]		{return 
+			  static_cast<yy::ParserXX::token_type>(yytext[0]);}
+{num}			{return yy::ParserXX::token_type::NUM;}
+\|\|			{return yy::ParserXX::token_type::OR;}
+&&			{return yy::ParserXX::token_type::AND;}
+\<=			{return yy::ParserXX::token_type::LESS_EQ;}
+>=			{return yy::ParserXX::token_type::GR_EQ;}
+==			{return yy::ParserXX::token_type::EQUAL;}
+!=			{return yy::ParserXX::token_type::NOT_EQUAL;}
+\+\+			{return yy::ParserXX::token_type::INC;}
+\-\-			{return yy::ParserXX::token_type::DEC;}
+<<EOF>>			{yylineno=1;return yy::ParserXX::token_type::END;}
+.			{return yy::ParserXX::token_type::ERR;}
+
+%%

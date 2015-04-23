@@ -1,0 +1,24 @@
+function overloaded(a[],b)
+{
+  result=a[0]+b;
+}
+
+function overloaded(a&,b&)
+{
+  result=a/b;
+}
+
+function overloaded(a,b[])
+{
+  result=a*b[0];
+}
+
+function overloaded(a[],b[])
+{
+  result=a[0]-b[0];
+}
+
+array a[2]=[7,5];
+b=3;
+result=overloaded(a,b)+overloaded(a,a)+
+  overloaded(a[1],a)+overloaded(b,a[1]);

@@ -1,0 +1,12 @@
+function foo(a[5])
+{
+  result=a[2];
+}
+
+function bar(a[])
+{
+  result=foo(a);
+}
+
+array a[2]=[1,2];
+result=bar(a);

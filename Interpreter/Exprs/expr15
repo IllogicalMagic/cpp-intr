@@ -1,0 +1,6 @@
+function fact(n)
+{
+  result=(n<2)?1:n*fact(n-1);
+}
+
+result=fact(3)*fact(4);

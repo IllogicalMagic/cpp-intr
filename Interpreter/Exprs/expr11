@@ -1,0 +1,14 @@
+n=255;
+i=1;
+while(i<=n)
+  i=i*2;
+i=i/2;
+result=0;
+tmp=n;
+while (i>=1)
+{
+  result=result*10;
+  (tmp-i>=0)?(++result):(result);
+  (tmp-i>=0)?(tmp=tmp-i):(tmp);
+  i=i/2; 
+}

@@ -1,0 +1,9 @@
+function foo(a&)
+{
+  result=a++;
+}
+
+a=2;
+array a[3];
+result=a[2];
+foo(2);
